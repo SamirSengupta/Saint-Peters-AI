@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Listen - Saint Peter's University Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/listen.css') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div class="w-screen h-screen bg-gradient-to-tr from-eee to-neutral-200 flex flex-col justify-center">
+        <div class="w-[80%] max-w-2xl mx-auto">
+            <h1 class="z-10 bg-gradient-to-r from-black via-pink-500 to-violet-800 inline-block text-transparent bg-clip-text font-normal text-5xl leading-tight">
+                Speak Now
+            </h1>
+            
+            <div class="bg-white p-8 rounded-2xl shadow-md border border-neutral-200 mt-6">
+                <div class="sound-wave flex justify-center items-center gap-2 h-16">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+                <!-- Display AI Response -->
+                <div id="ai-response" class="mt-6 text-center text-gray-700"></div>
+            </div>
+
+            <div class="mt-6 text-center">
+                <a href="/" class="text-neutral-500 hover:text-neutral-700 transition-colors">
+                    Return to Chat
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const soundWaveSpans = document.querySelectorAll('.sound-wave span');
+            const aiResponse = document.getElementById('ai-response');
+
+            // Check if the browser supports the Web Speech API
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let recognition;
+
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = false; // Stop after one sentence
+                recognition.interimResults = false; // Only final results
+                recognition.lang = 'en-US'; // Set language
+
+                // Function to start speech recognition
+                function startRecognition() {
+                    recognition.start();
+                    soundWaveSpans.forEach(span => span.style.animationPlayState = 'running');
+                }
+
+                // Event listener for when speech is recognized
+                recognition.onresult = async function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    aiResponse.textContent = `You said: ${transcript}`;
+
+                    // Send the transcript to the backend
+                    try {
+                        const response = await fetch('/listen', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ message: transcript }),
+                        });
+
+                        if (response.ok) {
+                            // Create an audio element and play the response
+                            const audio = new Audio(URL.createObjectURL(await response.blob()));
+                            audio.play();
+
+                            // Display the AI's response
+                            aiResponse.textContent = `AI: Processing...`;
+
+                            // Wait for the audio to finish playing
+                            audio.onended = function() {
+                                aiResponse.textContent = `AI: Response complete. Speak again.`;
+                                // Restart speech recognition after the AI responds
+                                startRecognition();
+                            };
+                        } else {
+                            aiResponse.textContent = 'Error: Could not process your request.';
+                            // Restart speech recognition even if there's an error
+                            startRecognition();
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        aiResponse.textContent = 'Error: Could not process your request.';
+                        // Restart speech recognition even if there's an error
+                        startRecognition();
+                    }
+                };
+
+                // Event listener for errors
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error:', event.error);
+                    aiResponse.textContent = 'Error: Speech recognition failed. Please try again.';
+                    // Restart speech recognition after an error
+                    startRecognition();
+                };
+
+                // Stop the animation when speech ends
+                recognition.onsoundend = function() {
+                    soundWaveSpans.forEach(span => span.style.animationPlayState = 'paused');
+                };
+
+                // Start speech recognition when the page loads
+                startRecognition();
+            } else {
+                alert('Speech recognition is not supported in this browser.');
+            }
+        });
+    </script>
+</body>
+</html>

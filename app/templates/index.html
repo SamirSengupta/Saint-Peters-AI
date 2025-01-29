@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Saint Peter's University Assistant</title>
+    <link rel="icon" href="../static/images/logo.png" type="image/png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        eee: '#EEEEEE',
+                        ccc: '#BFBFBF',
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+</head>
+<body>
+    <div class="w-screen h-screen bg-gradient-to-tr from-eee to-neutral-200 flex flex-col justify-center">
+        <div class="w-[80%] max-w-2xl mx-auto">
+            <h1 class="z-10 bg-gradient-to-r from-black via-pink-500 to-violet-800 inline-block text-transparent bg-clip-text font-normal text-5xl leading-tight">
+                Hello there,
+            </h1><br/>
+            <h1 class="z-10 bg-gradient-to-r from-black via-pink-500 to-violet-800 inline-block text-transparent bg-clip-text font-normal text-5xl -mt-2 mb-2 leading-tight">
+                How can I help you?
+            </h1>
+
+            <p class="text-neutral-500 leading-tight tracking-tight mb-6 text-lg">
+                Ask me anything about Saint Peter's University
+            </p>
+
+            <!-- Chat history will be displayed here -->
+            <div id="chat-history" class="mb-6 max-h-[400px] overflow-y-auto">
+            </div>
+
+            <div class="bg-white h-28 rounded-2xl shadow-md border border-neutral-200 relative">
+                <div class="flex">
+                    <textarea 
+                        id="user-input"
+                        class="grow m-4 outline outline-0 focus:outline-0 active:border-transparent min-h-16" 
+                        placeholder="Type your question here ..."
+                        maxlength="4000"
+                    ></textarea>
+                </div>
+                
+                <div class="flex gap-2 items-center absolute right-2 bottom-2">
+                    <!-- Microphone Button -->
+                    <button 
+                        id="microphone-button"
+                        class="bg-neutral-700 rounded-full text-white w-8 h-8 p-2 hover:bg-neutral-600 transition-colors"
+                        onclick="window.location.href='/listen'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </button>
+
+                    <!-- Character Count -->
+                    <div id="char-count" class="text-xs">0/4000</div>
+
+                    <!-- Send Button -->
+                    <button 
+                        id="send-button"
+                        class="bg-neutral-700 rounded-full text-white w-8 h-8 p-2 hover:bg-neutral-600 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const userInput = document.getElementById('user-input');
+            const sendButton = document.getElementById('send-button');
+            const chatHistory = document.getElementById('chat-history');
+            const charCount = document.getElementById('char-count');
+
+            // Update character count
+            function updateCharCount() {
+                const length = userInput.value.length;
+                charCount.textContent = `${length}/4000`;
+            }
+
+            // Add message to chat
+            function addMessageToChat(message, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `p-4 rounded-lg mb-4 ${isUser ? 'bg-slate-100 ml-12' : 'bg-gray-50 mr-12'}`;
+                messageDiv.textContent = message;
+                chatHistory.appendChild(messageDiv);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
+
+            // Send message
+            async function sendMessage() {
+                const message = userInput.value.trim();
+                if (!message) return;
+
+                // Add user message to chat
+                addMessageToChat(message, true);
+
+                // Clear input
+                userInput.value = '';
+                updateCharCount();
+
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message: message })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        addMessageToChat(data.response);
+                    } else {
+                        addMessageToChat('Sorry, there was an error processing your request.');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    addMessageToChat('Sorry, there was an error processing your request.');
+                }
+            }
+
+            // Event listeners
+            userInput.addEventListener('input', updateCharCount);
+            sendButton.addEventListener('click', sendMessage);
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
