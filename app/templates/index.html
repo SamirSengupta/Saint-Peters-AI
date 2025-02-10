@@ -5,18 +5,6 @@
     <title>Saint Peter's University Assistant</title>
     <link rel="icon" href="../static/images/logo.png" type="image/png">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        eee: '#EEEEEE',
-                        ccc: '#BFBFBF',
-                    }
-                }
-            }
-        }
-    </script>
     <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 </head>
 <body>
@@ -33,7 +21,6 @@
                 Ask me anything about Saint Peter's University
             </p>
 
-            <!-- Chat history will be displayed here -->
             <div id="chat-history" class="mb-6 max-h-[400px] overflow-y-auto">
             </div>
 
@@ -48,7 +35,6 @@
                 </div>
                 
                 <div class="flex gap-2 items-center absolute right-2 bottom-2">
-                    <!-- Microphone Button -->
                     <button 
                         id="microphone-button"
                         class="bg-neutral-700 rounded-full text-white w-8 h-8 p-2 hover:bg-neutral-600 transition-colors"
@@ -62,10 +48,8 @@
                         </svg>
                     </button>
 
-                    <!-- Character Count -->
                     <div id="char-count" class="text-xs">0/4000</div>
 
-                    <!-- Send Button -->
                     <button 
                         id="send-button"
                         class="bg-neutral-700 rounded-full text-white w-8 h-8 p-2 hover:bg-neutral-600 transition-colors"
@@ -87,13 +71,22 @@
             const chatHistory = document.getElementById('chat-history');
             const charCount = document.getElementById('char-count');
 
-            // Update character count
+            if (!sessionStorage.getItem('chatHistory')) {
+                sessionStorage.setItem('chatHistory', JSON.stringify([]));
+            }
+
+            function loadChatHistory() {
+                const conversations = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+                conversations.forEach(conv => {
+                    addMessageToChat(conv.message, conv.isUser);
+                });
+            }
+
             function updateCharCount() {
                 const length = userInput.value.length;
                 charCount.textContent = `${length}/4000`;
             }
 
-            // Add message to chat
             function addMessageToChat(message, isUser = false) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `p-4 rounded-lg mb-4 ${isUser ? 'bg-slate-100 ml-12' : 'bg-gray-50 mr-12'}`;
@@ -102,15 +95,14 @@
                 chatHistory.scrollTop = chatHistory.scrollHeight;
             }
 
-            // Send message
             async function sendMessage() {
                 const message = userInput.value.trim();
                 if (!message) return;
 
-                // Add user message to chat
                 addMessageToChat(message, true);
-
-                // Clear input
+                const conversations = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+                conversations.push({ message: message, isUser: true });
+                
                 userInput.value = '';
                 updateCharCount();
 
@@ -127,16 +119,17 @@
                     
                     if (response.ok) {
                         addMessageToChat(data.response);
+                        conversations.push({ message: data.response, isUser: false });
+                        sessionStorage.setItem('chatHistory', JSON.stringify(conversations));
                     } else {
-                        addMessageToChat('Sorry, there was an error processing your request.');
+                        addMessageToChat('Error processing request.');
                     }
                 } catch (error) {
                     console.error('Error:', error);
-                    addMessageToChat('Sorry, there was an error processing your request.');
+                    addMessageToChat('Request failed.');
                 }
             }
 
-            // Event listeners
             userInput.addEventListener('input', updateCharCount);
             sendButton.addEventListener('click', sendMessage);
             userInput.addEventListener('keypress', function(e) {
@@ -145,6 +138,8 @@
                     sendMessage();
                 }
             });
+
+            loadChatHistory();
         });
     </script>
 </body>

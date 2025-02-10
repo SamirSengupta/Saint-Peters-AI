@@ -4,9 +4,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatHistory = document.getElementById('chat-history');
     const charCount = document.getElementById('char-count');
 
-    // Load chat history from localStorage
+    if (!sessionStorage.getItem('chatHistory')) {
+        sessionStorage.setItem('chatHistory', JSON.stringify([]));
+    }
+
     function loadChatHistory() {
-        const conversations = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        const conversations = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
         conversations.forEach(conv => {
             addMessageToChat(conv.message, conv.isUser);
         });
@@ -29,14 +32,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const message = userInput.value.trim();
         if (!message) return;
 
-        // Add user message to chat
         addMessageToChat(message, true);
-
-        // Save to localStorage
-        const conversations = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        const conversations = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
         conversations.push({ message: message, isUser: true });
         
-        // Clear input
         userInput.value = '';
         updateCharCount();
 
@@ -53,15 +52,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (response.ok) {
                 addMessageToChat(data.response);
-                // Save AI response to localStorage
                 conversations.push({ message: data.response, isUser: false });
-                localStorage.setItem('chatHistory', JSON.stringify(conversations));
+                sessionStorage.setItem('chatHistory', JSON.stringify(conversations));
             } else {
-                addMessageToChat('Sorry, there was an error processing your request.');
+                addMessageToChat('Error processing request.');
             }
         } catch (error) {
             console.error('Error:', error);
-            addMessageToChat('Sorry, there was an error processing your request.');
+            addMessageToChat('Request failed.');
         }
     }
 
@@ -74,6 +72,5 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Load chat history when page loads
     loadChatHistory();
 });

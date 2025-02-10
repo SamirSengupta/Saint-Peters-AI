@@ -32,7 +32,7 @@ class ConversationBuffer:
         self.summary_embeddings = []
         self.summaries = []
         self.config = config
-        self.user_name = None  # Store the user's name
+        self.user_name = None
 
     def add_message(self, role: str, content: str):
         message = ChatMessage(
@@ -50,12 +50,12 @@ class ConversationBuffer:
 
     def _update_summaries(self):
         messages_text = "\n".join([f"{msg.role}: {msg.content}" for msg in self.messages[-5:]])
-        summary_prompt = f"Please summarize this conversation briefly:\n{messages_text}"
+        summary_prompt = f"Summarize this conversation briefly:\n{messages_text}"
         
         client = Groq(api_key=self.config['GROQ_API_KEY'])
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": summary_prompt}],
-            model="llama-3.3-70b-versatile",
+            model="llama3-70b-8192",
             temperature=0.3
         )
         summary = response.choices[0].message.content.strip()
@@ -79,7 +79,7 @@ class ConversationBuffer:
 class DocumentStore:
     def __init__(self):
         self.documents: List[PageContent] = []
-        self.chunk_embeddings = []  # Initialize as empty list
+        self.chunk_embeddings = []
         self.chunk_texts = []
         self.embedding_model = SentenceTransformer('all-mpnet-base-v2')
         self.chunk_size = 512
@@ -88,12 +88,10 @@ class DocumentStore:
         self.hash_file = 'document_hash.txt'
 
     def get_document_hash(self, file_path: str) -> str:
-        """Calculate MD5 hash of the document file"""
         with open(file_path, 'rb') as f:
             return hashlib.md5(f.read()).hexdigest()
 
     def save_embeddings(self):
-        """Save embeddings and chunks to file"""
         cache_data = {
             'chunk_embeddings': self.chunk_embeddings,
             'chunk_texts': self.chunk_texts
@@ -101,21 +99,17 @@ class DocumentStore:
         with open(self.embeddings_file, 'wb') as f:
             pickle.dump(cache_data, f)
         
-        # Save document hash
         if os.path.exists('scraping_results.docx'):
             with open(self.hash_file, 'w') as f:
                 f.write(self.get_document_hash('scraping_results.docx'))
 
     def load_embeddings(self) -> bool:
-        """Load embeddings from cache if available and valid"""
         try:
-            # Check if cache files exist
-            if not (os.path.exists(self.embeddings_file) and 
-                   os.path.exists(self.hash_file) and 
-                   os.path.exists('scraping_results.docx')):
+            if not (os.path.exists(self.embeddings_file) or 
+                   not os.path.exists(self.hash_file) or 
+                   not os.path.exists('scraping_results.docx')):
                 return False
 
-            # Check if document has changed
             with open(self.hash_file, 'r') as f:
                 cached_hash = f.read().strip()
             current_hash = self.get_document_hash('scraping_results.docx')
@@ -123,24 +117,21 @@ class DocumentStore:
             if cached_hash != current_hash:
                 return False
 
-            # Load cached embeddings
             with open(self.embeddings_file, 'rb') as f:
                 cache_data = pickle.load(f)
                 self.chunk_embeddings = cache_data['chunk_embeddings']
                 self.chunk_texts = cache_data['chunk_texts']
             return True
         except Exception as e:
-            print(f"Error loading embeddings cache: {e}")
+            print(f"Error loading embeddings: {e}")
             return False
 
     def preprocess_text(self, text: str) -> str:
-        """Clean and normalize text"""
         text = re.sub(r'\s+', ' ', text).strip()
         text = re.sub(r'[^a-zA-Z0-9\s.,!?-]', '', text)
         return text
 
     def create_chunks(self, text: str) -> List[str]:
-        """Split text into overlapping chunks"""
         words = text.split()
         chunks = []
         
@@ -151,13 +142,11 @@ class DocumentStore:
         return chunks
 
     def load_docx(self, file_path: str):
-        """Load and parse DOCX file"""
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Could not find {file_path}")
+            raise FileNotFoundError(f"Missing {file_path}")
         
-        # Try to load cached embeddings first
         if self.load_embeddings():
-            print("Using cached embeddings")
+            print("Loaded cached embeddings")
             return
 
         print("Creating new embeddings...")
@@ -171,10 +160,7 @@ class DocumentStore:
             if not text:
                 continue
 
-            if current_page.all_content:
-                current_page.all_content += f"\n{text}"
-            else:
-                current_page.all_content = text
+            current_page.all_content += f"\n{text}" if current_page.all_content else text
 
             if text.startswith("Page"):
                 if current_page.title:
@@ -212,8 +198,7 @@ class DocumentStore:
             self.documents.append(current_page)
 
     def create_embeddings(self):
-        """Create embeddings only if they haven't been loaded from cache"""
-        if len(self.chunk_embeddings) == 0:  # Check length instead of truth value
+        if len(self.chunk_embeddings) == 0:
             self.chunk_embeddings = []
             self.chunk_texts = []
             
@@ -237,12 +222,9 @@ class DocumentStore:
                     show_progress_bar=True,
                     normalize_embeddings=True
                 )
-                
-                # Save the new embeddings to cache
                 self.save_embeddings()
 
     def find_similar_documents(self, query: str, top_k: int = 3) -> List[Dict]:
-        """Find documents similar to the query"""
         processed_query = self.preprocess_text(query)
         query_embedding = self.embedding_model.encode(
             processed_query,
@@ -292,33 +274,27 @@ class Chatbot:
         self.groq_client = Groq(api_key=config['GROQ_API_KEY'])
         self.conversation_buffer = ConversationBuffer(config)
         self.first_interaction = True
-        self.user_name = None  # Add this line to store the user's name
+        self.user_name = None
+        self.reset_conversation()
+
+    def reset_conversation(self):
+        self.conversation_buffer.messages = []
+        self.conversation_buffer.summary_embeddings = []
+        self.conversation_buffer.summaries = []
+        self.first_interaction = True
+        self.user_name = None
 
     def get_response(self, user_input: str) -> Tuple[str, List[Dict]]:
-        """Generate a response to user input"""
-        if self.first_interaction:
-            self.first_interaction = False
-            return "Hello! I'm SAM, your student consultant at Saint Peter's University. What's your name?", []
-
-        if self.user_name is None:
-            # Store the user's name
-            self.user_name = user_input
-            return f"Nice to meet you, {user_input}! How can I assist you today?", []
-
-        # Add the user's message to the conversation buffer
+        if self.first_interaction or self.user_name is None:
+            return "", []
+        
         self.conversation_buffer.add_message("user", user_input)
-
-        # Get relevant context from the conversation buffer
         conv_context = self.conversation_buffer.get_relevant_context(user_input)
         similar_docs = self.doc_store.find_similar_documents(user_input)
         
         doc_context_parts = []
         for doc in similar_docs:
-            relevant_chunks = "\n".join([
-                f"- {chunk['text']}"
-                for chunk in doc['relevant_chunks'][:2]
-            ])
-            
+            relevant_chunks = "\n".join([f"- {chunk['text']}" for chunk in doc['relevant_chunks'][:2]])
             doc_context_parts.append(
                 f"Source: {doc['document']['title']}\n"
                 f"URL: {doc['document']['url']}\n"
@@ -326,13 +302,13 @@ class Chatbot:
             )
         
         doc_context = "\n\n".join(doc_context_parts)
-        full_context = f"""Reference Information:
+        full_context = f"""Reference Info:
 {doc_context}
 
-Previous Conversation Context:
+Previous Conversation:
 {conv_context}"""
 
-        prompt = f"""You are SAM, a friendly and conversational student consultant at Saint Peter's University. Your goal is to provide helpful, accurate, and concise responses to students. Avoid unnecessary details and focus on answering the question directly. The user's name is {self.user_name}. Dont greet the user again once you have done.
+        prompt = f"""You are SAM, a student consultant at Saint Peter's University. Be concise and helpful. User's name: {self.user_name}.
 
 Context:
 {full_context}
@@ -346,18 +322,15 @@ Answer:"""
                 messages=[
                     {
                         "role": "system",
-                        "content": f"You are a friendly and conversational student consultant at Saint Peter's University. Your goal is to provide helpful, accurate, and concise responses to students. Avoid unnecessary details and focus on answering the question directly. The user's name is {self.user_name}."
+                        "content": f"You are a student consultant. Be friendly and concise. User's name: {self.user_name}."
                     },
                     {"role": "user", "content": prompt}
                 ],
-                model="llama-3.3-70b-versatile",
+                model="llama3-70b-8192",
                 temperature=0.1
             )
             answer = response.choices[0].message.content.strip()
-            
-            # Add the assistant's response to the conversation buffer
             self.conversation_buffer.add_message("assistant", answer)
-            
             return answer, similar_docs
         except Exception as e:
             return f"Error: {str(e)}", []

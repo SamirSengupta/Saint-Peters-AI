@@ -23,7 +23,6 @@
                     <span></span>
                 </div>
 
-                <!-- Display AI Response -->
                 <div id="ai-response" class="mt-6 text-center text-gray-700"></div>
             </div>
 
@@ -40,7 +39,10 @@
             const soundWaveSpans = document.querySelectorAll('.sound-wave span');
             const aiResponse = document.getElementById('ai-response');
 
-            // Check if the browser supports the Web Speech API
+            if (!sessionStorage.getItem('chatHistory')) {
+                sessionStorage.setItem('chatHistory', JSON.stringify([]));
+            }
+
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             let recognition;
 
@@ -60,6 +62,8 @@
                     aiResponse.textContent = `You said: ${transcript}`;
 
                     try {
+                        let conversations = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+                        
                         const response = await fetch('/listen', {
                             method: 'POST',
                             headers: {
@@ -71,15 +75,12 @@
                         if (response.ok) {
                             const responseText = response.headers.get('X-Response-Text');
                             
-                            // Add the conversation to localStorage
-                            const conversations = JSON.parse(localStorage.getItem('chatHistory') || '[]');
                             conversations.push(
                                 { message: transcript, isUser: true },
                                 { message: responseText, isUser: false }
                             );
-                            localStorage.setItem('chatHistory', JSON.stringify(conversations));
+                            sessionStorage.setItem('chatHistory', JSON.stringify(conversations));
 
-                            // Create and play audio
                             const audio = new Audio(URL.createObjectURL(await response.blob()));
                             audio.play();
 
@@ -90,19 +91,19 @@
                                 startRecognition();
                             };
                         } else {
-                            aiResponse.textContent = 'Error: Could not process your request.';
+                            aiResponse.textContent = 'Error processing request.';
                             startRecognition();
                         }
                     } catch (error) {
                         console.error('Error:', error);
-                        aiResponse.textContent = 'Error: Could not process your request.';
+                        aiResponse.textContent = 'Request failed.';
                         startRecognition();
                     }
                 };
 
                 recognition.onerror = function(event) {
-                    console.error('Speech recognition error:', event.error);
-                    aiResponse.textContent = 'Error: Speech recognition failed. Please try again.';
+                    console.error('Speech error:', event.error);
+                    aiResponse.textContent = 'Error: Please try again.';
                     startRecognition();
                 };
 
@@ -112,7 +113,7 @@
 
                 startRecognition();
             } else {
-                alert('Speech recognition is not supported in this browser.');
+                alert('Speech recognition not supported.');
             }
         });
     </script>
