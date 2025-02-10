@@ -46,22 +46,19 @@
 
             if (SpeechRecognition) {
                 recognition = new SpeechRecognition();
-                recognition.continuous = false; // Stop after one sentence
-                recognition.interimResults = false; // Only final results
-                recognition.lang = 'en-US'; // Set language
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
 
-                // Function to start speech recognition
                 function startRecognition() {
                     recognition.start();
                     soundWaveSpans.forEach(span => span.style.animationPlayState = 'running');
                 }
 
-                // Event listener for when speech is recognized
                 recognition.onresult = async function(event) {
                     const transcript = event.results[0][0].transcript;
                     aiResponse.textContent = `You said: ${transcript}`;
 
-                    // Send the transcript to the backend
                     try {
                         const response = await fetch('/listen', {
                             method: 'POST',
@@ -72,46 +69,47 @@
                         });
 
                         if (response.ok) {
-                            // Create an audio element and play the response
+                            const responseText = response.headers.get('X-Response-Text');
+                            
+                            // Add the conversation to localStorage
+                            const conversations = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+                            conversations.push(
+                                { message: transcript, isUser: true },
+                                { message: responseText, isUser: false }
+                            );
+                            localStorage.setItem('chatHistory', JSON.stringify(conversations));
+
+                            // Create and play audio
                             const audio = new Audio(URL.createObjectURL(await response.blob()));
                             audio.play();
 
-                            // Display the AI's response
                             aiResponse.textContent = `AI: Processing...`;
 
-                            // Wait for the audio to finish playing
                             audio.onended = function() {
                                 aiResponse.textContent = `AI: Response complete. Speak again.`;
-                                // Restart speech recognition after the AI responds
                                 startRecognition();
                             };
                         } else {
                             aiResponse.textContent = 'Error: Could not process your request.';
-                            // Restart speech recognition even if there's an error
                             startRecognition();
                         }
                     } catch (error) {
                         console.error('Error:', error);
                         aiResponse.textContent = 'Error: Could not process your request.';
-                        // Restart speech recognition even if there's an error
                         startRecognition();
                     }
                 };
 
-                // Event listener for errors
                 recognition.onerror = function(event) {
                     console.error('Speech recognition error:', event.error);
                     aiResponse.textContent = 'Error: Speech recognition failed. Please try again.';
-                    // Restart speech recognition after an error
                     startRecognition();
                 };
 
-                // Stop the animation when speech ends
                 recognition.onsoundend = function() {
                     soundWaveSpans.forEach(span => span.style.animationPlayState = 'paused');
                 };
 
-                // Start speech recognition when the page loads
                 startRecognition();
             } else {
                 alert('Speech recognition is not supported in this browser.');

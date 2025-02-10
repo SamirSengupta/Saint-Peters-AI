@@ -66,29 +66,29 @@ def listen():
         return jsonify({'error': 'No message provided'}), 400
 
     try:
-        # Get the AI's response
+        # Get the AI's response and add messages to conversation buffer
         response, similar_docs = current_app.chatbot.get_response(user_message)
-
+        
         # Generate the audio using gTTS
         tts = gTTS(text=response, lang='en')
-
+        
         # Create an in-memory buffer to store the audio
         audio_buffer = BytesIO()
-        tts.write_to_fp(audio_buffer)  # Write the audio to the buffer
-        audio_buffer.seek(0)  # Reset the buffer position to the beginning
+        tts.write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
 
-        # Stream the audio directly to the client
         return Response(
             audio_buffer,
             mimetype="audio/mpeg",
             headers={
-                "Content-Disposition": "inline; filename=response.mp3"
+                "Content-Disposition": "inline; filename=response.mp3",
+                "X-Response-Text": response  # Add response text in header
             }
         )
 
     except Exception as e:
         print(f"Error in /listen route: {str(e)}")
-        traceback.print_exc()  # Print the full traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @main.route('/documents')

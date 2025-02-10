@@ -4,6 +4,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatHistory = document.getElementById('chat-history');
     const charCount = document.getElementById('char-count');
 
+    // Load chat history from localStorage
+    function loadChatHistory() {
+        const conversations = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        conversations.forEach(conv => {
+            addMessageToChat(conv.message, conv.isUser);
+        });
+    }
+
     function updateCharCount() {
         const length = userInput.value.length;
         charCount.textContent = `${length}/4000`;
@@ -24,6 +32,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add user message to chat
         addMessageToChat(message, true);
 
+        // Save to localStorage
+        const conversations = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        conversations.push({ message: message, isUser: true });
+        
         // Clear input
         userInput.value = '';
         updateCharCount();
@@ -41,6 +53,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (response.ok) {
                 addMessageToChat(data.response);
+                // Save AI response to localStorage
+                conversations.push({ message: data.response, isUser: false });
+                localStorage.setItem('chatHistory', JSON.stringify(conversations));
             } else {
                 addMessageToChat('Sorry, there was an error processing your request.');
             }
@@ -51,13 +66,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     userInput.addEventListener('input', updateCharCount);
-    
     sendButton.addEventListener('click', sendMessage);
-    
     userInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
+
+    // Load chat history when page loads
+    loadChatHistory();
 });
