@@ -14,7 +14,7 @@
             </h1>
             
             <div class="bg-white p-8 rounded-2xl shadow-md border border-neutral-200 mt-6">
-                <div class="sound-wave flex justify-center items-center gap-2 h-16">
+                <div class="sound-wave">
                     <span></span>
                     <span></span>
                     <span></span>
@@ -23,7 +23,7 @@
                     <span></span>
                 </div>
 
-                <div id="ai-response" class="mt-6 text-center text-gray-700"></div>
+                <div id="ai-response" class="mt-6 text-center text-gray-700">Listening...</div>
             </div>
 
             <div class="mt-6 text-center">
@@ -53,8 +53,14 @@
                 recognition.lang = 'en-US';
 
                 function startRecognition() {
-                    recognition.start();
-                    soundWaveSpans.forEach(span => span.style.animationPlayState = 'running');
+                    setTimeout(() => {
+                        aiResponse.textContent = 'Listening...';
+                        recognition.start();
+                        soundWaveSpans.forEach(span => {
+                            span.style.animationPlayState = 'running';
+                            span.style.opacity = '1';
+                        });
+                    }, 2000);
                 }
 
                 recognition.onresult = async function(event) {
@@ -104,16 +110,29 @@
                 recognition.onerror = function(event) {
                     console.error('Speech error:', event.error);
                     aiResponse.textContent = 'Error: Please try again.';
-                    startRecognition();
+                    
+                    soundWaveSpans.forEach(span => {
+                        span.style.animationPlayState = 'paused';
+                        span.style.opacity = '0.4';
+                    });
+                    
+                    setTimeout(() => {
+                        aiResponse.textContent = 'Listening...';
+                        startRecognition();
+                    }, 2000);
                 };
 
                 recognition.onsoundend = function() {
-                    soundWaveSpans.forEach(span => span.style.animationPlayState = 'paused');
+                    soundWaveSpans.forEach(span => {
+                        span.style.animationPlayState = 'paused';
+                        span.style.opacity = '0.4';
+                    });
                 };
 
                 startRecognition();
             } else {
                 alert('Speech recognition not supported.');
+                aiResponse.textContent = 'Speech recognition not supported in your browser.';
             }
         });
     </script>
