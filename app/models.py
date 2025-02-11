@@ -273,9 +273,8 @@ class Chatbot:
         self.doc_store = doc_store
         self.groq_client = Groq(api_key=config['GROQ_API_KEY'])
         self.conversation_buffer = ConversationBuffer(config)
-        self.first_interaction = True
-        self.user_name = None
-        self.reset_conversation()
+        self.first_interaction = True  # CRUCIAL ADDITION
+        self.user_name = None  # CRUCIAL ADDITION
 
     def reset_conversation(self):
         self.conversation_buffer.messages = []
@@ -285,9 +284,6 @@ class Chatbot:
         self.user_name = None
 
     def get_response(self, user_input: str) -> Tuple[str, List[Dict]]:
-        if self.first_interaction or self.user_name is None:
-            return "", []
-        
         self.conversation_buffer.add_message("user", user_input)
         conv_context = self.conversation_buffer.get_relevant_context(user_input)
         similar_docs = self.doc_store.find_similar_documents(user_input)

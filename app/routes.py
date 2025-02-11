@@ -141,9 +141,22 @@ def chat():
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
         
-        response, similar_docs = current_app.chatbot.get_response(user_message)
+        chatbot = current_app.chatbot
+        response_text = ""
+        similar_docs = []
+
+        # Handle conversation state (NEW ADDITION)
+        if chatbot.first_interaction:
+            response_text = "Hello! I'm SAM, your student consultant. What's your name?"
+            chatbot.first_interaction = False
+        elif chatbot.user_name is None:
+            chatbot.user_name = user_message
+            response_text = f"Nice to meet you, {user_message}! How can I help you today?"
+        else:
+            response_text, similar_docs = chatbot.get_response(user_message)
+
         return jsonify({
-            'response': response,
+            'response': response_text,
             'similar_docs': similar_docs
         })
     except Exception as e:
