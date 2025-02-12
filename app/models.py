@@ -304,7 +304,7 @@ class Chatbot:
 Previous Conversation:
 {conv_context}"""
 
-        prompt = f"""You are SAM, a student consultant at Saint Peter's University. Be concise and helpful. User's name: {self.user_name}.
+        prompt = f"""You are SAM, a student consultant at Saint Peter's University. Be concise and helpful. Use the conversation history to maintain context. don't give any additional information. just the answer for the question asked by the user.
 
 Context:
 {full_context}
