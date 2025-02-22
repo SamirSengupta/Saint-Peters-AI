@@ -21,7 +21,8 @@
                 Ask me anything about Saint Peter's University
             </p>
 
-            <div id="chat-history" class="mb-6 max-h-[400px] overflow-y-auto">
+            <div id="chat-history" class="mb-6 max-h-[400px] overflow-y-auto flex flex-col gap-4">
+                <!-- Messages will be appended here -->
             </div>
 
             <div class="bg-white h-28 rounded-2xl shadow-md border border-neutral-200 relative">
@@ -87,12 +88,20 @@
                 charCount.textContent = `${length}/4000`;
             }
 
-            function addMessageToChat(message, isUser = false) {
+            function addMessageToChat(message, isUser = false, isLoading = false) {
                 const messageDiv = document.createElement('div');
-                messageDiv.className = `p-4 rounded-lg mb-4 ${isUser ? 'bg-slate-100 ml-12' : 'bg-gray-50 mr-12'}`;
-                messageDiv.textContent = message;
+                messageDiv.className = `p-4 rounded-lg max-w-[70%] ${isUser ? 'bg-blue-200 self-end text-right' : 'bg-gray-100 self-start text-left'}`;
+                
+                if (isLoading) {
+                    messageDiv.textContent = '…';
+                    messageDiv.className += ' animate-pulse';
+                } else {
+                    messageDiv.textContent = message;
+                }
+                
                 chatHistory.appendChild(messageDiv);
                 chatHistory.scrollTop = chatHistory.scrollHeight;
+                return messageDiv; // Return the element for removal
             }
 
             async function sendMessage() {
@@ -106,6 +115,8 @@
                 userInput.value = '';
                 updateCharCount();
 
+                const loadingMessage = addMessageToChat('', false, true);
+
                 try {
                     const response = await fetch('/chat', {
                         method: 'POST',
@@ -115,18 +126,28 @@
                         body: JSON.stringify({ message: message })
                     });
 
+                    console.log('Response:', response);
                     const data = await response.json();
+                    console.log('Response data:', data);
                     
-                    if (response.ok) {
-                        addMessageToChat(data.response);
+                    // Safely remove loading message if it exists
+                    if (loadingMessage && chatHistory.contains(loadingMessage)) {
+                        chatHistory.removeChild(loadingMessage);
+                    }
+
+                    if (response.ok && data.response && data.response.trim()) {
+                        const aiMessage = addMessageToChat(data.response);
                         conversations.push({ message: data.response, isUser: false });
                         sessionStorage.setItem('chatHistory', JSON.stringify(conversations));
                     } else {
-                        addMessageToChat('Error processing request.');
+                        addMessageToChat('Sorry, I couldn’t process your request. Please try again or ask something about Saint Peter’s University.');
                     }
                 } catch (error) {
                     console.error('Error:', error);
-                    addMessageToChat('Request failed.');
+                    if (loadingMessage && chatHistory.contains(loadingMessage)) {
+                        chatHistory.removeChild(loadingMessage);
+                    }
+                    addMessageToChat('Request failed. Please try again.');
                 }
             }
 
