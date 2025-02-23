@@ -13,6 +13,8 @@ from groq import Groq
 from collections import defaultdict
 import docx2txt
 from datetime import datetime
+import json
+import uuid
 
 def preprocess_text(text: str) -> str:
     """
@@ -21,7 +23,7 @@ def preprocess_text(text: str) -> str:
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\xff]', '', text)
     text = text.replace('\t', ' ').replace('\n', ' ')
     text = re.sub(r'\s+', ' ', text).strip()
-    text = re.sub(r'[^a-zA-Z0-9\s.,!?-]', '', text)
+    text = re.sub(r'[^a-zA-Z0-0\s.,!?-]', '', text)
     return text.lower()
 
 @dataclass
@@ -108,7 +110,7 @@ class DocumentStore:
         sections = defaultdict(lambda: {'title': '', 'content': ''})
         header_buffers = []
         footer_buffers = []
-        current_section = None  # Initialize outside try block
+        current_section = None
 
         try:
             doc = Document(file_path)
@@ -235,13 +237,14 @@ class ConversationBuffer:
 
     def add_message(self, role: str, content: str):
         """
-        Add a message to the conversation buffer.
+        Add a message to the conversation buffer and save to JSON periodically.
         """
         message = {"role": role, "content": content, "timestamp": datetime.now().isoformat()}
         self.messages.append(message)
         
         if len(self.messages) % 5 == 0:
             self._update_summaries()
+            self.save_to_json()  # Save after every 5 messages
         
         if len(self.messages) > self.max_messages:
             self.messages = self.messages[-self.max_messages:]
@@ -281,6 +284,35 @@ class ConversationBuffer:
         
         return "\n".join(relevant_summaries)
 
+    def save_to_json(self, file_path="conversation_log.json", user_name=None):
+        """
+        Save the current conversation session to a JSON file.
+        """
+        session_data = {
+            "session_id": str(uuid.uuid4()),  # Unique session ID
+            "user_name": user_name or "Unknown",  # Use provided user_name or default
+            "conversation": self.messages,
+            "start_time": self.messages[0]["timestamp"] if self.messages else datetime.now().isoformat(),
+            "end_time": datetime.now().isoformat(),
+            "metadata": {
+                "similar_docs_used": []  # Populated in Chatbot.get_response
+            }
+        }
+
+        # Load existing data or initialize new structure
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                data = json.load(f)
+        else:
+            data = {"sessions": []}
+
+        # Append the new session
+        data["sessions"].append(session_data)
+
+        # Save back to file
+        with open(file_path, "w") as f:
+            json.dump(data, f, indent=2)
+
 class Chatbot:
     """
     Main chatbot class for handling user interactions.
@@ -307,11 +339,21 @@ class Chatbot:
 
     def get_response(self, user_input: str) -> Tuple[str, List[Dict]]:
         """
-        Generate chatbot response based on user input with optimized token usage.
+        Generate chatbot response based on user input with optimized token usage and save to JSON.
         """
         self.conversation_buffer.add_message("user", user_input)
         conv_context = self.conversation_buffer.get_relevant_context(user_input, top_k=1)
         similar_docs = self.doc_store.find_similar_documents(user_input, top_k=1)
+        
+        # Prepare metadata for similar docs
+        doc_metadata = [
+            {
+                "title": doc["document"]["title"],
+                "url": doc["document"]["url"],
+                "similarity_score": doc["similarity"]
+            }
+            for doc in similar_docs
+        ]
         
         doc_context_parts = []
         for doc in similar_docs:
@@ -341,6 +383,17 @@ class Chatbot:
             )
             answer = response.choices[0].message.content.strip()
             self.conversation_buffer.add_message("assistant", answer)
+            
+            # Save to JSON with user_name and update metadata
+            if self.conversation_buffer.messages:
+                self.conversation_buffer.save_to_json(user_name=self.user_name)
+                with open("conversation_log.json", "r+") as f:
+                    data = json.load(f)
+                    if data["sessions"]:
+                        data["sessions"][-1]["metadata"]["similar_docs_used"] = doc_metadata
+                        f.seek(0)
+                        json.dump(data, f, indent=2)
+
             return answer, similar_docs
         except Exception as e:
             return f"Error: {str(e)}", []
