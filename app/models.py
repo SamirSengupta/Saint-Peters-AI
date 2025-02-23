@@ -94,7 +94,7 @@ class DocumentStore:
 
     def load_docx(self, file_path: str):
         """
-        Parse DOCX file and extract structured content with fallback.
+        Parse DOCX file and extract structured content with fallback for complex files.
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Missing {file_path}")
@@ -108,6 +108,7 @@ class DocumentStore:
         sections = defaultdict(lambda: {'title': '', 'content': ''})
         header_buffers = []
         footer_buffers = []
+        current_section = None  # Initialize outside try block
 
         try:
             doc = Document(file_path)
@@ -132,7 +133,7 @@ class DocumentStore:
                         processed = preprocess_text(processed_row)
                         sections['TABLES']['content'] += '\n' + processed
         except Exception as e:
-            print(f"Failed to parse {file_path} with python-docx: {e}")
+            print(f"Failed to parse {file_path} with python-docx: {e}. Falling back to docx2txt.")
             text = docx2txt.process(file_path)
             processed = preprocess_text(text)
             sections['UNKNOWN']['content'] = processed
@@ -140,7 +141,7 @@ class DocumentStore:
         current_page.title = current_section or "Untitled"
         current_page.meta_description = "\n".join([sec['content'] for sec in sections.values()])[:150]
         current_page.main_content = "\n\n".join([sec['content'] for sec in sections.values()])
-        current_page.all_content = "\n".join([ "\n".join(header_buffers).strip(), current_page.main_content.strip(), "\n".join(footer_buffers).strip()])
+        current_page.all_content = "\n".join(["\n".join(header_buffers).strip(), current_page.main_content.strip(), "\n".join(footer_buffers).strip()])
         self.documents.append(current_page)
 
     def create_chunks(self, text: str, section_title: str) -> List[Dict]:

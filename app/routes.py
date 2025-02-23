@@ -6,33 +6,45 @@ from werkzeug.utils import secure_filename
 from docx import Document
 import PyPDF2
 import traceback
+import docx2txt  # For text extraction
 
 main = Blueprint('main', __name__)
 
 ALLOWED_EXTENSIONS = {'txt', 'docx', 'pdf'}
 
 def allowed_file(filename):
+    """Check if the file extension is allowed."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def append_to_docx(input_file, filename):
-    target_doc = Document("scraping_results.docx")
-    
-    target_doc.add_paragraph().add_run().add_break()
-    
-    target_doc.add_paragraph(f"Page {len(target_doc.paragraphs)}")
+    """Append uploaded file content to scraping_results.docx safely."""
+    # If scraping_results.docx exists, extract its content with docx2txt to avoid depth issues
+    existing_content = ""
+    if os.path.exists("scraping_results.docx"):
+        existing_content = docx2txt.process("scraping_results.docx")
+
+    # Create a new document to avoid inheriting deep XML structure
+    target_doc = Document()
+
+    # Add existing content if any
+    if existing_content.strip():
+        target_doc.add_paragraph(existing_content)
+        target_doc.add_paragraph().add_run().add_break()
+
+    # Add new content headers
+    target_doc.add_paragraph(f"Page {len(target_doc.paragraphs) + 1}")
     target_doc.add_paragraph(f"URL: Uploaded File - {filename}")
     target_doc.add_paragraph("Meta Description: Uploaded document content")
     target_doc.add_paragraph("Main Content")
 
+    # Append new content based on file type
     if filename.endswith('.txt'):
         content = input_file.read().decode('utf-8')
         target_doc.add_paragraph(content)
     
     elif filename.endswith('.docx'):
-        doc = Document(input_file)
-        for paragraph in doc.paragraphs:
-            if paragraph.text.strip():
-                target_doc.add_paragraph(paragraph.text)
+        content = docx2txt.process(input_file)
+        target_doc.add_paragraph(content)
     
     elif filename.endswith('.pdf'):
         pdf_reader = PyPDF2.PdfReader(input_file)
@@ -46,14 +58,17 @@ def append_to_docx(input_file, filename):
 
 @main.route('/')
 def index():
+    """Render the main index page."""
     return render_template('index.html')
 
 @main.route('/listen')
 def listen_page():
+    """Render the listen page."""
     return render_template('listen.html')
 
 @main.route('/listen', methods=['POST'])
 def listen():
+    """Handle audio response generation."""
     try:
         data = request.get_json()
         if not data:
@@ -102,10 +117,12 @@ def listen():
 
 @main.route('/documents')
 def documents():
+    """Render the documents page."""
     return render_template('documents.html')
 
 @main.route('/upload-document', methods=['POST'])
 def upload_document():
+    """Handle document upload and processing."""
     try:
         if 'document' not in request.files:
             return jsonify({'error': 'No document part'}), 400
@@ -130,10 +147,12 @@ def upload_document():
         
         return jsonify({'message': 'Document uploaded successfully'})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error(f"Upload error: {str(e)}")
+        return jsonify({'error': f"Failed to process document: {str(e)}"}), 500
 
 @main.route('/chat', methods=['POST'])
 def chat():
+    """Handle chat interactions."""
     try:
         data = request.get_json()
         user_message = data.get('message', '')
@@ -145,7 +164,7 @@ def chat():
         response_text = ""
         similar_docs = []
 
-        # Handle conversation state (NEW ADDITION)
+        # Handle conversation state
         if chatbot.first_interaction:
             response_text = "Hello! I'm SAM, your student consultant. What's your name?"
             chatbot.first_interaction = False
